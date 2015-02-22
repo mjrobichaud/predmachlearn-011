@@ -1,0 +1,84 @@
+---
+title: "predmachlearn-011 Project"
+author: "mjrobichaud"
+date: "February 22, 2015"
+output: html_document
+---
+
+## Data Exploration and Cleaning
+First, we need to load a few libraries and load the data.
+```{r}
+library(caret)
+library(randomForest)
+library(RCurl)
+train_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+train_conn <- getURL(train_url)
+train_data <- read.csv(textConnection(train_conn))
+test_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+test_conn <- getURL(test_url)
+test_data <- read.csv(textConnection(test_conn))
+```
+Now, to start things off, we set the seed for reproducability purposes.
+```{r}
+set.seed(12345)
+```
+Next, we can do some exploratory analysis to better understand the datasets. I've chosen not to print to keep this report concise.
+
+dim(test_data)
+dim(train_data)
+names(test_data)
+names(train_data)
+head(test_data)
+head(train_data)
+
+We can see there are 160 columns in both datasets. There are 20 rows in the test data, and 19622 in the training data. From using head() we can see there are columns with NA values, missing values, and values with "#DIV/0!". Our first step in cleaning is to remove those.
+```{r}
+train_data <- train_data[ , apply(train_data, 2, function(x) !any(is.na(x), x == "#DIV/0!", x == ""))]
+test_data <- test_data[ , apply(test_data, 2, function(x) !any(is.na(x), x == "#DIV/0!", x == ""))]
+```
+Using dim() we can see we now have 60 columns in each dataset. From names() we can see there are other variables that cannot be predictors, such as timestamps, names, and "window" variables. Let's remove those next.
+```{r}
+train_data <- train_data[ , c(8:60)]
+test_data <- test_data[ , c(8:60)]
+```
+With that, we are left with 53 columns in each dataset.
+
+Our final step is to create two datasets from out training dataset to perform cross-validation.
+```{r}
+samples <- createDataPartition(y=train_data$classe, p=0.75, list=FALSE)
+train_final <- train_data[samples, ]
+test_eval <- train_data[-samples, ]
+```
+
+## Model Selection, Training, and Validation
+I am choosing to use a Random Forest model. I have used this algorithm in real world applications in my work and have found it very effective.
+
+First, let's train our model.
+```{r}
+rf_model <- randomForest(classe ~. , data=train_final, method="class")
+```
+Now, we can predict with our eval data.
+```{r}
+rf_eval <- predict(rf_model, test_eval, type="class")
+```
+
+Finally, let's run the model on the original test dataset.
+```{r}
+rf_pred <- predict(rf_model, test_data, type="class")
+```
+
+## Final Model Submission
+The last step is to submit our model for grading.
+
+### Write files for submission
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(rf_pred)
+```
